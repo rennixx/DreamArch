@@ -8,12 +8,41 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
 
-from modules.pitch_detector import PitchDetector
-from modules.midi_processor import MIDIProcessor
-from modules.music_generator import MusicGenerator
-from modules.lyrics_generator import LyricsGenerator
-from modules.vocal_synth import VocalSynthesizer
-from modules.mixer import AudioMixer
+# Optional imports with error tracking
+MODULES_AVAILABLE = {}
+MODULES_MISSING = []
+
+try:
+    from modules.pitch_detector import PitchDetector
+    MODULES_AVAILABLE['pitch_detector'] = True
+except ImportError as e:
+    MODULES_AVAILABLE['pitch_detector'] = False
+    MODULES_MISSING.append(f"pitch_detector ({e})")
+
+from modules.midi_processor import MIDIProcessor  # Always available
+
+try:
+    from modules.music_generator import MusicGenerator
+    MODULES_AVAILABLE['music_generator'] = True
+except ImportError as e:
+    MODULES_AVAILABLE['music_generator'] = False
+    MODULES_MISSING.append(f"music_generator ({e})")
+
+try:
+    from modules.lyrics_generator import LyricsGenerator
+    MODULES_AVAILABLE['lyrics_generator'] = True
+except ImportError as e:
+    MODULES_AVAILABLE['lyrics_generator'] = False
+    MODULES_MISSING.append(f"lyrics_generator ({e})")
+
+try:
+    from modules.vocal_synth import VocalSynthesizer
+    MODULES_AVAILABLE['vocal_synth'] = True
+except ImportError as e:
+    MODULES_AVAILABLE['vocal_synth'] = False
+    MODULES_MISSING.append(f"vocal_synth ({e})")
+
+from modules.mixer import AudioMixer  # Always available
 
 import yaml
 import json
@@ -24,7 +53,7 @@ from utils.file_manager import (
 )
 from utils.audio_utils import check_gpu_availability, clear_cuda_cache
 
-router = APIRouter(prefix="/api", tags=["generation"])
+router = APIRouter(tags=["generation"])
 
 # Load configuration
 with open("config/settings.yaml") as f:
@@ -85,6 +114,18 @@ async def generate_track(
     Target time: ~60s total on 4GB VRAM
     """
 
+    # Check if required modules are available
+    if not MODULES_AVAILABLE.get('pitch_detector', False):
+        raise HTTPException(
+            status_code=503,
+            detail="Pitch detection module not available. Install: pip install crepe tensorflow"
+        )
+
+    # MusicGen is optional - will generate vocals-only if not available
+    music_gen_available = MODULES_AVAILABLE.get('music_generator', False)
+    if not music_gen_available:
+        print("WARNING: MusicGen not available - will generate vocals-only track")
+
     job_id = generate_job_id()
 
     try:
@@ -118,38 +159,60 @@ async def generate_track(
         midi_path = get_output_path("midi", job_id, "mid")
         midi_data = midi_processor.pitches_to_midi(pitch_data, midi_path)
 
-        # 4. Generate instrumental (MusicGen small + fp16)
-        music_gen = MusicGenerator(
-            model_name=config["generation"]["musicgen_model"],
-            use_fp16=config["generation"]["use_fp16"]
-        )
-        instrumental_audio, sr = music_gen.generate_from_melody(
-            midi_path=midi_path,
-            style_prompt=preset["prompt"],
-            duration=preset.get("duration", config["generation"]["musicgen_duration"])
-        )
+        instrumental_path = None
+        sr = 22050  # Default sample rate
 
-        instrumental_path = get_output_path("instrumental", job_id, "wav")
-        music_gen.save_generated_audio(instrumental_audio, sr, instrumental_path)
+        # 4. Generate instrumental (MusicGen small + fp16) - OPTIONAL
+        if music_gen_available:
+            music_gen = MusicGenerator(
+                model_name=config["generation"]["musicgen_model"],
+                use_fp16=config["generation"]["use_fp16"]
+            )
+            instrumental_audio, sr = music_gen.generate_from_melody(
+                midi_path=midi_path,
+                style_prompt=preset["prompt"],
+                duration=preset.get("duration", config["generation"]["musicgen_duration"])
+            )
 
-        # Clear GPU cache before vocals
-        clear_cuda_cache()
+            instrumental_path = get_output_path("instrumental", job_id, "wav")
+            music_gen.save_generated_audio(instrumental_audio, sr, instrumental_path)
 
-        # 5. Generate lyrics (GPT-3.5-turbo for speed)
+            # Clear GPU cache before vocals
+            clear_cuda_cache()
+
+        # 5. Generate lyrics (using configured provider)
+        lyrics_config = config["lyrics"]
+        provider = lyrics_config.get("provider", os.getenv("LLM_PROVIDER", "ollama"))
+
+        # Select model based on provider
+        if provider == "ollama":
+            model = lyrics_config.get("ollama_model", os.getenv("OLLAMA_MODEL", "ministral-3:latest"))
+        elif provider == "openai":
+            model = lyrics_config.get("openai_model", "gpt-3.5-turbo")
+        else:
+            model = lyrics_config.get("ollama_model", "ministral-3:latest")
+
         lyrics_gen = LyricsGenerator(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            model=config["lyrics"]["model"]
+            provider=provider,
+            model=model,
+            api_key=os.getenv("OPENAI_API_KEY")
         )
         lyrics_data = lyrics_gen.generate_lyrics(
             style=preset["name"],
             mood="contemplative",
-            num_lines=config["lyrics"]["default_num_lines"]
+            num_lines=lyrics_config["default_num_lines"]
         )
 
         # 6. Generate vocals (TTS - CPU based)
+        vocal_config = config["vocals"]
+        tts_provider = vocal_config.get("provider", os.getenv("TTS_PROVIDER", "pyttsx3"))
+
+        # Only require API key for openai provider
+        api_key = os.getenv("OPENAI_API_KEY") if tts_provider == "openai" else None
+
         vocal_synth = VocalSynthesizer(
-            model_type=config["vocals"]["model"],
-            api_key=os.getenv("OPENAI_API_KEY")
+            provider=tts_provider,
+            api_key=api_key
         )
 
         vocals_path = get_output_path("vocals", job_id, "wav")
@@ -171,31 +234,47 @@ async def generate_track(
         # 7. Mix everything (CPU-based effects)
         mixer = AudioMixer(sample_rate=sr)
 
-        mixed_path = get_output_path("mixed", job_id, "wav")
-        mixer.mix_tracks(
-            instrumental_path=instrumental_path,
-            vocal_path=vocals_processed_path,
-            output_path=mixed_path
-        )
+        # If no instrumental was generated, just use vocals with some basic processing
+        if instrumental_path:
+            mixed_path = get_output_path("mixed", job_id, "wav")
+            mixer.mix_tracks(
+                instrumental_path=instrumental_path,
+                vocal_path=vocals_processed_path,
+                output_path=mixed_path
+            )
+            # Master the mixed track
+            final_path = get_output_path("final", job_id, "mp3")
+            mixer.master_track(
+                input_path=mixed_path,
+                output_path=final_path,
+                target_loudness=config["mixing"]["target_loudness"]
+            )
+        else:
+            # No instrumental - just process the vocals
+            final_path = get_output_path("final", job_id, "mp3")
+            mixer.master_track(
+                input_path=vocals_processed_path,
+                output_path=final_path,
+                target_loudness=config["mixing"]["target_loudness"]
+            )
 
-        # 8. Master
-        final_path = get_output_path("final", job_id, "mp3")
-        mixer.master_track(
-            input_path=mixed_path,
-            output_path=final_path,
-            target_loudness=config["mixing"]["target_loudness"]
-        )
+        # Build metadata
+        metadata = {
+            "style": preset["name"],
+            "key": midi_data.get("detected_key"),
+            "lyrics": lyrics_data.get("lyrics"),
+            "has_instrumental": instrumental_path is not None,
+            "instruments": "full" if instrumental_path else "vocals-only"
+        }
+
+        if instrumental_path:
+            metadata["duration"] = preset.get("duration", 45)
 
         return GenerationResponse(
             job_id=job_id,
             output_url=f"/outputs/final/{job_id}.mp3",
             status="completed",
-            metadata={
-                "style": preset["name"],
-                "duration": preset.get("duration", 45),
-                "key": midi_data.get("detected_key"),
-                "lyrics": lyrics_data.get("lyrics")
-            }
+            metadata=metadata
         )
 
     except Exception as e:

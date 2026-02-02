@@ -1,8 +1,8 @@
 """
-Vocal Synthesizer Module using OpenAI TTS + Pedalboard Effects
-Fast CPU-based vocal synthesis with style-specific effects
+Vocal Synthesizer Module with Multiple TTS Options
+Supports: pyttsx3 (free, built-in), Edge TTS (free), OpenAI TTS (paid)
 
-Optimized for speed and low VRAM usage.
+Free TTS options included - no API key required!
 """
 
 import os
@@ -11,15 +11,29 @@ import soundfile as sf
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import logging
+import tempfile
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# TTS Options
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+try:
+    import pyttsx3
+    PYTTSX3_AVAILABLE = True
+except ImportError:
+    PYTTSX3_AVAILABLE = False
+
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 try:
     from pedalboard import (
@@ -107,35 +121,46 @@ class VocalSynthesizer:
 
     def __init__(
         self,
-        model_type: str = "tts",
+        provider: str = "pyttsx3",
         api_key: Optional[str] = None,
-        sample_rate: int = 24000
+        sample_rate: int = 22050
     ):
         """
         Initialize vocal synthesizer
 
         Args:
-            model_type: Type of model ('tts' for OpenAI TTS)
-            api_key: OpenAI API key (or set OPENAI_API_KEY env var)
-            sample_rate: Output sample rate (OpenAI TTS uses 24kHz)
+            provider: TTS provider ('pyttsx3', 'edge', 'openai')
+                     - pyttsx3: Free, built-in Python TTS
+                     - edge: Free Microsoft Edge TTS API
+                     - openai: Paid, high quality (needs API key)
+            api_key: API key (only for OpenAI)
+            sample_rate: Output sample rate
         """
-        if not OPENAI_AVAILABLE:
-            raise ImportError(
-                "OpenAI package is required. Install with: pip install openai"
-            )
-
+        self.provider = provider
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "OpenAI API key required. Set OPENAI_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
-
-        self.client = OpenAI(api_key=self.api_key)
-        self.model_type = model_type
         self.sample_rate = sample_rate
 
-        logger.info(f"VocalSynthesizer initialized with model={model_type}")
+        # Validate provider availability
+        if provider == "pyttsx3":
+            if not PYTTSX3_AVAILABLE:
+                raise ImportError("pyttsx3 not available. Install: pip install pyttsx3")
+            logger.info(f"VocalSynthesizer using pyttsx3 (free, built-in)")
+
+        elif provider == "edge":
+            if not REQUESTS_AVAILABLE:
+                raise ImportError("requests not available. Install: pip install requests")
+            logger.info(f"VocalSynthesizer using Edge TTS (free)")
+
+        elif provider == "openai":
+            if not OPENAI_AVAILABLE:
+                raise ImportError("OpenAI package not available. Install: pip install openai")
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY required for openai provider")
+            self.client = OpenAI(api_key=self.api_key)
+            logger.info(f"VocalSynthesizer using OpenAI TTS")
+
+        else:
+            raise ValueError(f"Unknown provider: {provider}. Use 'pyttsx3', 'edge', or 'openai'")
 
     def _get_voice_for_style(self, style: str) -> str:
         """Get the appropriate voice for a given style"""
@@ -169,7 +194,7 @@ class VocalSynthesizer:
         if not lyrics:
             raise ValueError("Lyrics list is empty")
 
-        logger.info(f"Synthesizing vocals: {len(lyrics)} lines, style={style}")
+        logger.info(f"Synthesizing vocals: provider={self.provider}, {len(lyrics)} lines, style={style}")
 
         # Get voice for style
         voice = voice or self._get_voice_for_style(style)
@@ -178,32 +203,110 @@ class VocalSynthesizer:
         lyrics_text = ". ".join(lyrics)
 
         try:
-            # Generate speech using OpenAI TTS
-            response = self.client.audio.speech.create(
-                model="tts-1-hd",  # Use faster tts-1 for speed
-                voice=voice,
-                input=lyrics_text,
-                speed=1.0,
-                response_format="wav"
-            )
-
-            # Save to file
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'wb') as f:
-                f.write(response.content)
-
-            logger.info(f"Vocals saved to: {output_path}")
-
-            # Load and get info
-            audio, sr = sf.read(output_path)
-            duration = len(audio) / sr
-            logger.info(f"Generated vocals: {duration:.2f}s")
-
-            return output_path
+            if self.provider == "pyttsx3":
+                return self._synthesize_with_pyttsx3(lyrics_text, output_path, voice)
+            elif self.provider == "edge":
+                return self._synthesize_with_edge_tts(lyrics_text, output_path)
+            elif self.provider == "openai":
+                return self._synthesize_with_openai(lyrics_text, voice, output_path)
+            else:
+                raise ValueError(f"Unknown provider: {self.provider}")
 
         except Exception as e:
             logger.error(f"Failed to synthesize vocals: {e}")
             raise
+
+    def _synthesize_with_pyttsx3(
+        self,
+        text: str,
+        output_path: str,
+        voice: Optional[str] = None
+    ) -> str:
+        """Generate speech using pyttsx3 (free, built-in)"""
+        engine = pyttsx3.init()
+
+        # Set voice properties
+        voices = engine.getProperty('voices')
+        if voices:
+            # Try to find a good voice
+            engine.setProperty('voice', voices[0].id)
+
+        # Set rate (speed) - slightly slower for singing
+        engine.setProperty('rate', 150)  # Default is 200
+
+        # Save to file
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        engine.save_to_file(text, output_path)
+
+        logger.info(f"Vocals saved to: {output_path} (pyttsx3)")
+        return output_path
+
+    def _synthesize_with_edge_tts(
+        self,
+        text: str,
+        output_path: str
+    ) -> str:
+        """Generate speech using Microsoft Edge TTS (free API)"""
+        # Edge TTS requires a simple GET request
+        # Using the communicate API (free, no key needed)
+
+        # Build URL for Edge TTS
+        edge_url = "https://speech.platform.bing.com/consumption/tts/v1"
+
+        # Use MP3 format and a generic voice
+        params = {
+            "text": text,
+            "locale": "en-US",
+            "gender": "Female",
+            "rate": "0",  # Normal speed
+            "pitch": "0",
+            "volume": "0",
+            "format": "audio-24khz-48kbitrate-mono-mp3"
+        }
+
+        try:
+            response = requests.get(
+                edge_url,
+                params=params,
+                timeout=30
+            )
+            response.raise_for_status()
+
+            # Save audio
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+
+            logger.info(f"Vocals saved to: {output_path} (Edge TTS)")
+            return output_path
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Edge TTS request failed: {e}")
+            # Fallback to pyttsx3
+            logger.info("Falling back to pyttsx3...")
+            return self._synthesize_with_pyttsx3(text, output_path, None)
+
+    def _synthesize_with_openai(
+        self,
+        text: str,
+        voice: str,
+        output_path: str
+    ) -> str:
+        """Generate speech using OpenAI TTS (high quality)"""
+        response = self.client.audio.speech.create(
+            model="tts-1-hd",
+            voice=voice,
+            input=text,
+            speed=1.0,
+            response_format="wav"
+        )
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, 'wb') as f:
+            f.write(response.content)
+
+        logger.info(f"Vocals saved to: {output_path} (OpenAI)")
+        return output_path
 
     def apply_vocal_effects(
         self,

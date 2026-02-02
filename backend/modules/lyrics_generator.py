@@ -1,6 +1,6 @@
 """
-Lyrics Generator Module using OpenAI GPT-3.5-turbo
-Fast lyrics generation with style-specific prompting
+Lyrics Generator Module
+Supports OpenAI GPT, Ollama (local LLM), and Anthropic Claude
 
 Optimized for speed and cost-efficiency.
 """
@@ -10,12 +10,19 @@ from typing import Dict, List, Optional
 import logging
 from pathlib import Path
 import json
+import requests
 
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,36 +88,51 @@ Write ONLY the lyrics, no titles, explanations, or metadata."""
 
     def __init__(
         self,
+        provider: Optional[str] = None,
         api_key: Optional[str] = None,
-        model: str = "gpt-3.5-turbo",
+        model: Optional[str] = None,
         cache_enabled: bool = True
     ):
         """
         Initialize lyrics generator
 
         Args:
-            api_key: OpenAI API key (or set OPENAI_API_KEY env var)
-            model: Model to use (gpt-3.5-turbo for speed, gpt-4 for quality)
+            provider: LLM provider ('openai', 'ollama', 'anthropic'). Auto-detect if None.
+            api_key: API key (auto-detected from env vars if None)
+            model: Model name (auto-selected based on provider if None)
             cache_enabled: Enable result caching
         """
-        if not OPENAI_AVAILABLE:
-            raise ImportError(
-                "OpenAI package is required. Install with: pip install openai"
-            )
+        # Auto-detect provider
+        if provider is None:
+            provider = os.getenv("LLM_PROVIDER", "ollama")
 
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "OpenAI API key required. Set OPENAI_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
-
-        self.client = OpenAI(api_key=self.api_key)
-        self.model = model
+        self.provider = provider
         self.cache_enabled = cache_enabled
         self.cache = {}
 
-        logger.info(f"LyricsGenerator initialized with model={model}")
+        # Configure based on provider
+        if provider == "ollama":
+            self.model = model or os.getenv("OLLAMA_MODEL", "mistral:7b")
+            self.base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            logger.info(f"LyricsGenerator using Ollama: model={self.model}")
+
+        elif provider == "openai":
+            if not OPENAI_AVAILABLE:
+                raise ImportError("OpenAI package required. Install: pip install openai")
+
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY required for OpenAI provider")
+
+            self.model = model or "gpt-3.5-turbo"
+            self.client = OpenAI(api_key=self.api_key)
+            logger.info(f"LyricsGenerator using OpenAI: model={self.model}")
+
+        elif provider == "anthropic":
+            # Add anthropic support later if needed
+            raise NotImplementedError("Anthropic provider not yet implemented")
+        else:
+            raise ValueError(f"Unknown provider: {provider}. Use 'openai', 'ollama', or 'anthropic'")
 
     def _build_prompt(
         self,
@@ -177,32 +199,23 @@ REQUIREMENTS:
             Dict with lyrics, syllable counts, rhyme scheme, metadata
         """
         # Check cache
-        cache_key = f"{style}_{mood}_{theme}_{num_lines}_{temperature}"
+        cache_key = f"{self.provider}_{self.model}_{style}_{mood}_{theme}_{num_lines}_{temperature}"
         if self.cache_enabled and cache_key in self.cache:
             logger.info(f"Using cached lyrics for: {style}")
             return self.cache[cache_key]
 
-        logger.info(f"Generating lyrics: style={style}, mood={mood}, lines={num_lines}")
+        logger.info(f"Generating lyrics: provider={self.provider}, style={style}, mood={mood}, lines={num_lines}")
 
         # Build prompt
         prompt = self._build_prompt(style, mood, theme, num_lines)
 
         try:
-            # Call OpenAI API
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=temperature,
-                max_tokens=500,
-                frequency_penalty=0.5,  # Reduce repetition
-                presence_penalty=0.3    # Encourage variety
-            )
-
-            # Extract lyrics
-            lyrics_text = response.choices[0].message.content.strip()
+            if self.provider == "ollama":
+                lyrics_text = self._generate_with_ollama(prompt, temperature)
+            elif self.provider == "openai":
+                lyrics_text = self._generate_with_openai(prompt, temperature)
+            else:
+                raise ValueError(f"Unknown provider: {self.provider}")
 
             # Parse into lines
             lyrics = self._parse_lyrics(lyrics_text, num_lines)
@@ -220,11 +233,82 @@ REQUIREMENTS:
                 "style": style,
                 "mood": mood,
                 "theme": theme,
+                "provider": self.provider,
                 "model": self.model,
-                "estimated_duration": total_syllables / 4  # Rough estimate at 4 syllables/sec
+                "estimated_duration": total_syllables / 4
             }
 
             # Cache result
+            if self.cache_enabled:
+                self.cache[cache_key] = result
+
+            logger.info(
+                f"Generated {len(lyrics)} lines "
+                f"({total_syllables} syllables, rhyme: {rhyme_scheme})"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to generate lyrics: {e}")
+            raise
+
+    def _generate_with_openai(self, prompt: str, temperature: float) -> str:
+        """Generate lyrics using OpenAI API"""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=temperature,
+            max_tokens=500,
+            frequency_penalty=0.5,
+            presence_penalty=0.3
+        )
+        return response.choices[0].message.content.strip()
+
+    def _generate_with_ollama(self, prompt: str, temperature: float) -> str:
+        """Generate lyrics using Ollama API"""
+        # Build Ollama request
+        # For local LLMs, simpler prompts often work better
+        ollama_prompt = f"{self.SYSTEM_PROMPT}\n\n{prompt}"
+
+        payload = {
+            "model": self.model,
+            "prompt": ollama_prompt,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": 500,
+                "top_k": 40,
+                "top_p": 0.9
+            }
+        }
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=60
+            )
+            response.raise_for_status()
+
+            # Ollama returns JSON with "response" field
+            data = response.json()
+            lyrics_text = data.get("response", "").strip()
+
+            if not lyrics_text:
+                raise ValueError("Empty response from Ollama")
+
+            return lyrics_text
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ollama request failed: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Ollama parsing failed: {e}")
+            raise
             if self.cache_enabled:
                 self.cache[cache_key] = result
 

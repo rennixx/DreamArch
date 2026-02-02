@@ -47,16 +47,26 @@ app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 @app.get("/health")
 async def health_check():
     """Check if the API is running"""
+    from utils.audio_utils import check_gpu_availability
+    gpu_info = check_gpu_availability()
+
     return {
         "status": "healthy",
         "service": "Dream Architect",
         "version": "1.0.0",
-        "gpu_available": False  # Will be updated with actual GPU check
+        "gpu_available": gpu_info["available"],
+        "generate_router_available": GENERATE_ROUTER_AVAILABLE
     }
 
-# Include routers
-from routers import generate
-app.include_router(generate.router, prefix="/api", tags=["generation"])
+# Include routers (with graceful fallback)
+try:
+    from routers import generate
+    app.include_router(generate.router, prefix="/api", tags=["generation"])
+    GENERATE_ROUTER_AVAILABLE = True
+except ImportError as e:
+    GENERATE_ROUTER_AVAILABLE = False
+    print(f"Warning: Generate router not available: {e}")
+    print("Some ML dependencies may be missing. Install with: pip install crepe audiocraft openai")
 
 # Root endpoint
 @app.get("/")

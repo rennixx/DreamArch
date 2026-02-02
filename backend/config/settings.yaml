@@ -36,14 +36,18 @@ midi:
 
 # Lyrics Generation Settings
 lyrics:
-  model: "gpt-3.5-turbo"  # Faster than gpt-4
+  provider: "ollama"  # Options: ollama, openai, anthropic
+  ollama_model: "ministral-3:latest"  # Your local Ollama model
+  # Alternative models: qwen3-vl:latest, mistral:7b, etc.
+  openai_model: "gpt-3.5-turbo"  # Fallback if using OpenAI
   default_num_lines: 6
   cache_results: true
+  ollama_base_url: "http://localhost:11434"
 
 # Vocal Settings
 vocals:
-  model: "tts"  # OpenAI TTS (fast, CPU-based)
-  tts_model: "tts-1-hd"  # Faster than tts-1
+  provider: "pyttsx3"  # Options: pyttsx3 (free), edge (free), openai (paid)
+  tts_model: "tts-1-hd"
   voice: "alloy"
   effects_enabled: true
   use_cpu_for_effects: true  # Save GPU for MusicGen

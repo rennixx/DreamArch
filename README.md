@@ -2,7 +2,7 @@
 
 > Turn your hummed melodies into full AI-generated songs
 
-**Optimized for 4GB VRAM • ~60s generation time**
+**Optimized for 4GB VRAM • ~60s generation time • Supports Ollama (Local LLM)**
 
 ---
 
@@ -24,10 +24,42 @@ Dream Architect is a full-stack AI music generation application that transforms 
 |---------|------------|------------|
 | Pitch Detection | CREPE (small) | ~0.5GB |
 | Music Generation | MusicGen Small + fp16 | ~1.5GB |
-| Lyrics | GPT-3.5-turbo | CPU |
+| Lyrics | Ollama (local) / OpenAI (cloud) | CPU |
 | Vocals | OpenAI TTS | CPU |
 | Mixing | Pedalboard | CPU |
 | **Total** | | **~2-2.5GB** |
+
+---
+
+## 🆕 Ollama Support (Local LLM)
+
+**No API key needed for lyrics!** Use your local Ollama models for lyrics generation.
+
+### Your Available Models
+
+```bash
+ollama list
+# NAME                  ID              SIZE
+# qwen3-vl:latest       901cae732162    6.1 GB
+# ministral-3:latest    1922accd5827    6.0 GB
+```
+
+### Configuration
+
+Your `backend/.env` is already configured for Ollama:
+
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=ministral-3:latest
+```
+
+### How It Works
+
+1. **Lyrics Generation:** Uses your local Ollama model (ministral-3)
+2. **Vocal Synthesis:** Still needs OpenAI API key for TTS (text-to-speech)
+
+**Why?** Ollama provides LLM chat models (for lyrics), while OpenAI TTS provides voice synthesis.
 
 ---
 
@@ -38,7 +70,8 @@ Dream Architect is a full-stack AI music generation application that transforms 
 - **Python 3.9+**
 - **Node.js 18+**
 - **GPU** with 4GB+ VRAM (NVIDIA recommended)
-- **OpenAI API key**
+- **Ollama** installed and running (for local lyrics)
+- **OpenAI API key** (for TTS/vocals only)
 
 ### Installation
 

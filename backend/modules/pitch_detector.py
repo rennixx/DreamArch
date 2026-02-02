@@ -5,7 +5,12 @@ Optimized for 4GB VRAM usage with 'small' model capacity
 Extracts pitch values from hummed audio and converts them to time-stamped data.
 """
 
-import crepe
+try:
+    import crepe
+    CREPE_AVAILABLE = True
+except ImportError:
+    CREPE_AVAILABLE = False
+
 import librosa
 import numpy as np
 import soundfile as sf
@@ -41,6 +46,12 @@ class PitchDetector:
                            'small' recommended for 4GB VRAM target
             device: Force device ('cuda' or 'cpu'), auto-detect if None
         """
+        if not CREPE_AVAILABLE:
+            raise ImportError(
+                "CREPE module is required for pitch detection. "
+                "Install with: pip install crepe"
+            )
+
         self.model_capacity = model_capacity
         self.device = self._determine_device(device)
         self.model_loaded = False
@@ -138,8 +149,8 @@ class PitchDetector:
             model_capacity=self.model_capacity,
             viterbi=viterbi,
             step_size=step_size,
-            center=True,
-            pad=True
+            center=True
+            # pad parameter removed - not supported in newer CREPE
         )
 
         # Smooth and clean the pitch contour
