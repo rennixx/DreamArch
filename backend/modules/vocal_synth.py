@@ -81,7 +81,7 @@ class VocalSynthesizer:
             "delay_wet_level": 0.3,
             "chorus_rate_hz": 0.5,
             "chorus_depth": 0.3,
-            "chorus_center_delay_ms": 8,
+            "chorus_centre_delay_ms": 8,
             "highpass_cutoff": 100,
             "lowpass_cutoff": 8000
         },
@@ -92,7 +92,7 @@ class VocalSynthesizer:
             "reverb_dry_level": 0.85,
             "chorus_rate_hz": 0.2,
             "chorus_depth": 0.15,
-            "chorus_center_delay_ms": 5,
+            "chorus_centre_delay_ms": 5,
             "compressor_threshold_db": -20,
             "compressor_ratio": 4,
             "highpass_cutoff": 80,
@@ -101,7 +101,7 @@ class VocalSynthesizer:
         "Daft Punk": {
             "chorus_rate_hz": 8.0,
             "chorus_depth": 0.8,
-            "chorus_center_delay_ms": 3,
+            "chorus_centre_delay_ms": 3,
             "reverb_room_size": 0.3,
             "reverb_wet_level": 0.2,
             "compressor_threshold_db": -15,
@@ -116,6 +116,19 @@ class VocalSynthesizer:
             "compressor_threshold_db": -18,
             "compressor_ratio": 3,
             "highpass_cutoff": 120
+        },
+        "Phonk": {
+            "reverb_room_size": 0.3,
+            "reverb_damping": 0.7,
+            "reverb_wet_level": 0.15,
+            "reverb_dry_level": 0.85,
+            "chorus_rate_hz": 0.3,
+            "chorus_depth": 0.5,
+            "chorus_centre_delay_ms": 4,
+            "compressor_threshold_db": -12,
+            "compressor_ratio": 8,
+            "highpass_cutoff": 150,
+            "lowpass_cutoff": 5000
         }
     }
 
@@ -237,6 +250,10 @@ class VocalSynthesizer:
         # Save to file
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         engine.save_to_file(text, output_path)
+
+        # CRITICAL: runAndWait() is required to actually write the file
+        # pyttsx3.save_to_file() is async and only queues the operation
+        engine.runAndWait()
 
         logger.info(f"Vocals saved to: {output_path} (pyttsx3)")
         return output_path
@@ -370,7 +387,7 @@ class VocalSynthesizer:
             board.append(Chorus(
                 rate_hz=effects.get("chorus_rate_hz", 0.5),
                 depth=effects.get("chorus_depth", 0.3),
-                center_delay_ms=effects.get("chorus_center_delay_ms", 8)
+                centre_delay_ms=effects.get("chorus_centre_delay_ms", 8)
             ))
 
         # Delay (echo)

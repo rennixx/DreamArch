@@ -3,11 +3,40 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist-python/
+build-python/
+venv/
+env/
+.venv/
+.env/
+venv.bak/
+svve/
+
 # Build outputs
 dist/
 build/
 *.js.map
 /.claude/
+
+# Next.js
+.next/
+out/
+.next-cache/
+
+# Backend outputs
+backend/uploads/
+backend/outputs/
+backend/outputs/*
 
 # IDE
 .vscode/
@@ -15,10 +44,12 @@ build/
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Environment
 .env
@@ -33,6 +64,11 @@ logs/
 .cache/
 .parcel-cache/
 
+# Test files
+test_*.py
+*_test.py
+
+# Documentation
 dream_architect_implementation_guide.md
 dream_architect_MASTER_SUMMARY.md
 dream_architect_module_prompts.md

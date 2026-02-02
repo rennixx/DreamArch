@@ -34,6 +34,16 @@ const PRESETS: StylePreset[] = [
     id: 'frank-zappa',
     name: 'Frank Zappa',
     description: 'Experimental rock with complex arrangements'
+  },
+  {
+    id: 'phonk',
+    name: 'Phonk',
+    description: '🔥 Drift phonk with cowbells and heavy 808 bass'
+  },
+  {
+    id: 'phonk-instrumental',
+    name: 'Phonk (Instrumental)',
+    description: '🔥 Pure drift phonk beat - no vocals'
   }
 ];
 

@@ -92,7 +92,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
             max={duration || 0}
             value={currentTime}
             onChange={handleSeek}
-            disabled={disabled}
+            disabled={!duration}
             className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
             style={{ background: `linear-gradient(to right, #a855f7 0%, #a855f7 ${(currentTime / duration) * 100}%, #374151 ${(currentTime / duration) * 100}%, #374151 100%)` }}
           />

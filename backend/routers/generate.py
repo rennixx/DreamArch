@@ -29,6 +29,13 @@ except ImportError as e:
     MODULES_MISSING.append(f"music_generator ({e})")
 
 try:
+    from modules.bark_generator import BarkGenerator
+    MODULES_AVAILABLE['bark_generator'] = True
+except ImportError as e:
+    MODULES_AVAILABLE['bark_generator'] = False
+    MODULES_MISSING.append(f"bark_generator ({e})")
+
+try:
     from modules.lyrics_generator import LyricsGenerator
     MODULES_AVAILABLE['lyrics_generator'] = True
 except ImportError as e:
@@ -162,7 +169,10 @@ async def generate_track(
         instrumental_path = None
         sr = 22050  # Default sample rate
 
-        # 4. Generate instrumental (MusicGen small + fp16) - OPTIONAL
+        # 4. Generate instrumental - Try MusicGen first, fallback to Bark
+        instrumental_generated = False
+
+        # Try MusicGen first
         if music_gen_available:
             music_gen = MusicGenerator(
                 model_name=config["generation"]["musicgen_model"],
@@ -171,19 +181,56 @@ async def generate_track(
 
             # Check if MusicGen is actually available (audiocraft installed)
             if music_gen.is_available:
-                instrumental_audio, sr = music_gen.generate_from_melody(
-                    midi_path=midi_path,
-                    style_prompt=preset["prompt"],
-                    duration=preset.get("duration", config["generation"]["musicgen_duration"])
-                )
+                try:
+                    instrumental_audio, sr = music_gen.generate_from_melody(
+                        midi_path=midi_path,
+                        style_prompt=preset["prompt"],
+                        duration=preset.get("duration", config["generation"]["musicgen_duration"])
+                    )
+
+                    instrumental_path = get_output_path("instrumental", job_id, "wav")
+                    music_gen.save_generated_audio(instrumental_audio, sr, instrumental_path)
+                    instrumental_generated = True
+
+                    # Clear GPU cache before vocals
+                    clear_cuda_cache()
+                    print("INFO: Generated instrumental with MusicGen")
+                except Exception as e:
+                    print(f"WARNING: MusicGen generation failed: {e}")
+                    instrumental_generated = False
+            else:
+                print("INFO: MusicGen not available - trying Bark")
+
+        # Fallback to Bark if MusicGen failed or unavailable
+        if not instrumental_generated and MODULES_AVAILABLE.get('bark_generator', False):
+            try:
+                print("INFO: Using Bark for instrumental generation")
+                bark_gen = BarkGenerator()
+
+                # Use style-specific generation
+                if "phonk" in style.lower():
+                    instrumental_audio, sr = bark_gen.generate_phonk(
+                        output_path=get_output_path("instrumental", job_id, "wav"),
+                        variation="drift"
+                    )
+                else:
+                    instrumental_audio, sr = bark_gen.generate_with_style(
+                        style=preset["name"],
+                        mood=preset.get("description", ""),
+                        output_path=get_output_path("instrumental", job_id, "wav"),
+                        duration=preset.get("duration", 15)
+                    )
 
                 instrumental_path = get_output_path("instrumental", job_id, "wav")
-                music_gen.save_generated_audio(instrumental_audio, sr, instrumental_path)
+                instrumental_generated = True
+                print("INFO: Generated instrumental with Bark")
 
-                # Clear GPU cache before vocals
-                clear_cuda_cache()
-            else:
-                print("WARNING: MusicGen class created but audiocraft not available - skipping instrumental generation")
+            except Exception as e:
+                print(f"WARNING: Bark generation failed: {e}")
+                instrumental_generated = False
+
+        if not instrumental_generated:
+            print("WARNING: No instrumental generated - will produce vocals-only track")
 
         # 5. Generate lyrics (using configured provider)
         lyrics_config = config["lyrics"]
