@@ -168,17 +168,22 @@ async def generate_track(
                 model_name=config["generation"]["musicgen_model"],
                 use_fp16=config["generation"]["use_fp16"]
             )
-            instrumental_audio, sr = music_gen.generate_from_melody(
-                midi_path=midi_path,
-                style_prompt=preset["prompt"],
-                duration=preset.get("duration", config["generation"]["musicgen_duration"])
-            )
 
-            instrumental_path = get_output_path("instrumental", job_id, "wav")
-            music_gen.save_generated_audio(instrumental_audio, sr, instrumental_path)
+            # Check if MusicGen is actually available (audiocraft installed)
+            if music_gen.is_available:
+                instrumental_audio, sr = music_gen.generate_from_melody(
+                    midi_path=midi_path,
+                    style_prompt=preset["prompt"],
+                    duration=preset.get("duration", config["generation"]["musicgen_duration"])
+                )
 
-            # Clear GPU cache before vocals
-            clear_cuda_cache()
+                instrumental_path = get_output_path("instrumental", job_id, "wav")
+                music_gen.save_generated_audio(instrumental_audio, sr, instrumental_path)
+
+                # Clear GPU cache before vocals
+                clear_cuda_cache()
+            else:
+                print("WARNING: MusicGen class created but audiocraft not available - skipping instrumental generation")
 
         # 5. Generate lyrics (using configured provider)
         lyrics_config = config["lyrics"]

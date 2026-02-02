@@ -55,22 +55,28 @@ class MusicGenerator:
             device: 'cuda', 'cpu', or None for auto-detect
             use_fp16: Use half precision for memory savings
         """
-        if not AUDIOCRAFT_AVAILABLE:
-            raise ImportError(
-                "audiocraft is required for music generation. "
-                "Install with: pip install audiocraft"
-            )
-
         self.model_name = model_name
         self.use_fp16 = use_fp16
         self.device = self._determine_device(device)
         self.model = None
         self.model_loaded = False
+        self.available = AUDIOCRAFT_AVAILABLE
 
-        logger.info(
-            f"MusicGenerator initialized: "
-            f"model={model_name}, device={self.device}, fp16={use_fp16}"
-        )
+        if not self.available:
+            logger.warning(
+                "MusicGenerator initialized but audiocraft is not available. "
+                "Install with: pip install audiocraft"
+            )
+        else:
+            logger.info(
+                f"MusicGenerator initialized: "
+                f"model={model_name}, device={self.device}, fp16={use_fp16}"
+            )
+
+    @property
+    def is_available(self) -> bool:
+        """Check if MusicGen is available for use"""
+        return self.available
 
     def _determine_device(self, device: Optional[str]) -> str:
         """Determine the best device for computation"""
@@ -96,6 +102,12 @@ class MusicGenerator:
         """Load MusicGen model (lazy loading)"""
         if self.model_loaded:
             return
+
+        if not self.available:
+            raise RuntimeError(
+                "audiocraft is required for music generation. "
+                "Install with: pip install audiocraft"
+            )
 
         logger.info(f"Loading MusicGen model: {self.model_name}")
 
