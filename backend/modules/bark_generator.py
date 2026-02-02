@@ -13,6 +13,18 @@ from pathlib import Path
 import logging
 from typing import Optional, Tuple
 import tempfile
+import sys
+
+# PyTorch 2.6 compatibility fix: Patch torch.load to use weights_only=False
+# This is needed because Bark models were saved with older PyTorch versions
+import torch
+_original_torch_load = torch.load
+def _patched_torch_load(*args, weights_only=None, **kwargs):
+    """Patched torch.load that defaults to weights_only=False for compatibility"""
+    if weights_only is None:
+        weights_only = False  # Allow loading older models
+    return _original_torch_load(*args, weights_only=weights_only, **kwargs)
+torch.load = _patched_torch_load
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -129,8 +141,8 @@ class BarkGenerator:
             audio_array = generate_audio(
                 text=music_prompt,
                 history_prompt=None,  # Can use voice presets if needed
-                temp=temperature,
-                generation_params=generation_params or {}
+                text_temp=temperature,
+                waveform_temp=temperature
             )
 
             # Bark outputs at 24kHz

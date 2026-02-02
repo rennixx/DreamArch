@@ -1,0 +1,56 @@
+{
+  "presets": [
+    {
+      "id": "montagem-batidao",
+      "name": "Montagem Batidão",
+      "description": "Heavy 160 BPM batidão phonk, aggressive cuica, pounding 808 bass, festival anthem",
+      "prompt": "[instrumental] heavy electronic beat, cuica drums, deep 808 bass, punchy kick, fast hi-hats, brazilian phonk, dance rhythm",
+      "temperature": 0.85,
+      "duration": 90,
+      "effects": {
+        "distortion": 0.4,
+        "compression": 0.6,
+        "bass_boost": 12
+      }
+    },
+    {
+      "id": "rave-lofi",
+      "name": "Rave Lofi",
+      "description": "170 BPM psy-phonk, lofi aesthetic, fast cowbell patterns, rave atmosphere",
+      "prompt": "[instrumental] electronic rave beat, cowbell pattern, deep bass, energetic synth, fast rhythm, trance atmosphere",
+      "temperature": 0.8,
+      "duration": 90,
+      "effects": {
+        "distortion": 0.3,
+        "compression": 0.55,
+        "bass_boost": 10
+      }
+    },
+    {
+      "id": "mega-slap",
+      "name": "Mega Slap",
+      "description": "180 BPM maximum slap, face-melting bass drops, cuica madness, pure energy",
+      "prompt": "[instrumental] intense electronic beat, cuica drum, powerful sub bass, punchy drums, high energy rhythm, festival anthem",
+      "temperature": 0.9,
+      "duration": 90,
+      "effects": {
+        "distortion": 0.5,
+        "compression": 0.7,
+        "bass_boost": 14
+      }
+    },
+    {
+      "id": "funk-eletronico",
+      "name": "Funk Eletrônico",
+      "description": "150 BPM electronic funk, modern Brazilian Phonk, synth melodies, club-ready",
+      "prompt": "[instrumental] electronic funk beat, melodic synth, cuica percussion, groovy bass, club rhythm, dance music",
+      "temperature": 0.75,
+      "duration": 120,
+      "effects": {
+        "distortion": 0.2,
+        "compression": 0.5,
+        "bass_boost": 8
+      }
+    }
+  ]
+}

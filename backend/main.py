@@ -18,7 +18,8 @@ output_dirs = [
     "outputs/instrumental",
     "outputs/vocals",
     "outputs/mixed",
-    "outputs/final"
+    "outputs/final",
+    "outputs/beats"
 ]
 
 for dir_path in output_dirs:
@@ -67,6 +68,14 @@ except ImportError as e:
     GENERATE_ROUTER_AVAILABLE = False
     print(f"Warning: Generate router not available: {e}")
     print("Some ML dependencies may be missing. Install with: pip install crepe audiocraft openai")
+
+try:
+    from routers import beats
+    app.include_router(beats.router, prefix="/api/beats", tags=["beats"])
+    BEATS_ROUTER_AVAILABLE = True
+except ImportError as e:
+    BEATS_ROUTER_AVAILABLE = False
+    print(f"Warning: Beats router not available: {e}")
 
 # Root endpoint
 @app.get("/")
