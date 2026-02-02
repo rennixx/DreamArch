@@ -1,0 +1,73 @@
+# Dream Architect Configuration
+# Optimized for 4GB VRAM, ~60s generation time
+
+# Audio Settings
+audio:
+  input_sample_rate: 44100
+  output_sample_rate: 44100
+  recording_duration: 3  # seconds
+  output_duration_min: 30
+  output_duration_max: 45
+
+# Generation Settings - Optimized for 4GB VRAM
+generation:
+  musicgen_model: "facebook/musicgen-small"  # ~1.5GB VRAM
+  musicgen_duration: 45  # seconds
+  musicgen_temperature: 1.0
+  musicgen_top_k: 250
+  musicgen_top_p: 0.9
+  use_fp16: true  # Half precision for memory savings
+  max_generation_duration: 60  # seconds target
+
+# Pitch Detection Settings
+pitch_detection:
+  crepe_model_capacity: "small"  # tiny, small, medium, large, full
+  crepe_viterbi: true
+  crepe_step_size: 10  # ms
+  min_confidence: 0.5
+  smooth_pitches: true
+
+# MIDI Settings
+midi:
+  quantize_resolution: 16  # 16th notes
+  default_tempo: 120
+  default_time_signature: "4/4"
+  min_note_duration: 0.1  # seconds
+
+# Lyrics Generation Settings
+lyrics:
+  model: "gpt-3.5-turbo"  # Faster than gpt-4
+  default_num_lines: 6
+  cache_results: true
+
+# Vocal Settings
+vocals:
+  model: "tts"  # OpenAI TTS (fast, CPU-based)
+  tts_model: "tts-1-hd"  # Faster than tts-1
+  voice: "alloy"
+  effects_enabled: true
+  use_cpu_for_effects: true  # Save GPU for MusicGen
+
+# Mixing Settings
+mixing:
+  master_volume: -3  # dB
+  compression_ratio: 3.0
+  reverb_room_size: 0.5
+  eq_enabled: true
+  target_loudness: -14.0  # LUFS
+  use_cpu_processing: true  # Pedalboard on CPU
+
+# Performance Settings
+performance:
+  gpu_memory_fraction: 0.9
+  enable_model_caching: true
+  batch_size: 1
+  clear_cuda_cache: true
+  max_concurrent_generations: 1  # For 4GB VRAM
+
+# API Settings
+api:
+  max_upload_size: 10485760  # 10MB
+  allowed_formats: ["wav", "webm", "mp3", "ogg"]
+  timeout: 120  # seconds
+  enable_cors: true

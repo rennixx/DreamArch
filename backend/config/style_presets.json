@@ -1,0 +1,55 @@
+{
+  "presets": [
+    {
+      "id": "pink-floyd",
+      "name": "Pink Floyd",
+      "description": "Psychedelic space rock with atmospheric guitars",
+      "prompt": "psychedelic rock, atmospheric, spacey, progressive, Pink Floyd style, ethereal guitars, cosmic synthesizers, contemplative, 110 BPM",
+      "tempo": 110,
+      "duration": 45,
+      "effects": {
+        "reverb": 0.7,
+        "delay": 0.6,
+        "chorus": 0.4
+      }
+    },
+    {
+      "id": "daft-punk",
+      "name": "Daft Punk",
+      "description": "Electronic funk with vocoder and synths",
+      "prompt": "electronic dance music, French house, funky bass, vocoder vocals, Daft Punk style, robotic, groovy, disco influenced, 125 BPM",
+      "tempo": 125,
+      "duration": 45,
+      "effects": {
+        "vocoder": true,
+        "compression": 0.8,
+        "sidechain": true
+      }
+    },
+    {
+      "id": "billie-eilish",
+      "name": "Billie Eilish",
+      "description": "Dark pop with whispered vocals and minimal production",
+      "prompt": "dark pop, minimal production, whispered vocals, deep bass, Billie Eilish style, intimate, moody, sparse instrumentation, 95 BPM",
+      "tempo": 95,
+      "duration": 40,
+      "effects": {
+        "reverb": 0.3,
+        "compression": 0.9,
+        "low_pass": 8000
+      }
+    },
+    {
+      "id": "frank-zappa",
+      "name": "Frank Zappa",
+      "description": "Experimental rock with complex arrangements",
+      "prompt": "experimental rock, complex time signatures, jazz fusion, Frank Zappa style, quirky, intricate guitar, satirical, 140 BPM",
+      "tempo": 140,
+      "duration": 45,
+      "effects": {
+        "distortion": 0.5,
+        "wah": 0.4
+      }
+    }
+  ]
+}
